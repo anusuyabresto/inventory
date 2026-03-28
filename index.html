@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ansuya Restaurant & Bar — Inventory</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="screen active">
+  <div class="login-bg">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-emblem">🐟</div>
+        <h1>Ansuya</h1>
+        <p>Restaurant & Bar</p>
+        <span class="tagline">Inventory Management</span>
+      </div>
+      <form id="loginForm">
+        <div class="field-group">
+          <label>Username</label>
+          <input type="text" id="loginUser" placeholder="Enter username" autocomplete="off">
+        </div>
+        <div class="field-group">
+          <label>Password</label>
+          <input type="password" id="loginPass" placeholder="Enter password">
+        </div>
+        <button type="submit" class="btn-primary">Sign In</button>
+        <div id="loginError" class="error-msg"></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="appScreen" class="screen">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <span class="s-emblem">🐟</span>
+        <div>
+          <h2>Ansuya</h2>
+          <small>Restaurant & Bar</small>
+        </div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-page="dashboard">
+        <span class="nav-icon">📊</span> Dashboard
+      </a>
+      <a href="#" class="nav-item" data-page="inventory">
+        <span class="nav-icon">📦</span> Inventory
+      </a>
+      <a href="#" class="nav-item" data-page="addstock">
+        <span class="nav-icon">➕</span> Add / Update Stock
+      </a>
+      <a href="#" class="nav-item" data-page="lowstock">
+        <span class="nav-icon">⚠️</span> Low Stock Alerts
+      </a>
+      <a href="#" class="nav-item" data-page="auditlog">
+        <span class="nav-icon">📋</span> Audit Log
+      </a>
+      <a href="#" class="nav-item master-only" data-page="users">
+        <span class="nav-icon">👤</span> Manage Users
+      </a>
+      <a href="#" class="nav-item master-only" data-page="categories">
+        <span class="nav-icon">🗂️</span> Categories
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span class="user-avatar" id="sidebarAvatar">M</span>
+        <div>
+          <div class="user-name" id="sidebarName">Master</div>
+          <div class="user-role" id="sidebarRole">Admin</div>
+        </div>
+      </div>
+      <button class="btn-logout" id="logoutBtn">Logout</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger" id="hamburger">☰</button>
+        <h3 id="pageTitle">Dashboard</h3>
+      </div>
+      <div class="topbar-right">
+        <span class="live-badge">● LIVE</span>
+        <span class="datetime" id="datetimeDisplay"></span>
+      </div>
+    </header>
+
+    <!-- PAGES -->
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="stats-grid">
+        <div class="stat-card teal">
+          <div class="stat-icon">📦</div>
+          <div class="stat-info">
+            <div class="stat-number" id="statTotal">0</div>
+            <div class="stat-label">Total Items</div>
+          </div>
+        </div>
+        <div class="stat-card gold">
+          <div class="stat-icon">⚠️</div>
+          <div class="stat-info">
+            <div class="stat-number" id="statLow">0</div>
+            <div class="stat-label">Low Stock</div>
+          </div>
+        </div>
+        <div class="stat-card dark">
+          <div class="stat-icon">🗂️</div>
+          <div class="stat-info">
+            <div class="stat-number" id="statCategories">0</div>
+            <div class="stat-label">Categories</div>
+          </div>
+        </div>
+        <div class="stat-card rust">
+          <div class="stat-icon">🔄</div>
+          <div class="stat-info">
+            <div class="stat-number" id="statUpdates">0</div>
+            <div class="stat-label">Today's Updates</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="dash-card">
+          <h4>Category-wise Stock</h4>
+          <div id="categoryChart" class="category-bars"></div>
+        </div>
+        <div class="dash-card">
+          <h4>Recent Activity</h4>
+          <div id="recentActivity" class="activity-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INVENTORY -->
+    <div class="page" id="page-inventory">
+      <div class="page-controls">
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="🔍 Search items...">
+        </div>
+        <select id="filterCategory" class="select-styled">
+          <option value="">All Categories</option>
+        </select>
+        <button class="btn-primary" onclick="openAddModal()">+ Add Item</button>
+      </div>
+      <div class="table-wrap">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th>Item Name</th>
+              <th>Category</th>
+              <th>Quantity</th>
+              <th>Unit</th>
+              <th>Min Stock</th>
+              <th>Status</th>
+              <th>Last Updated By</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inventoryTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ADD/UPDATE STOCK -->
+    <div class="page" id="page-addstock">
+      <div class="form-card">
+        <h3>Update Stock</h3>
+        <div class="form-grid">
+          <div class="field-group">
+            <label>Select Item</label>
+            <select id="stockItemSelect" class="select-styled">
+              <option value="">-- Choose Item --</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>Action</label>
+            <select id="stockAction" class="select-styled">
+              <option value="add">Add Stock</option>
+              <option value="remove">Remove / Consume</option>
+              <option value="set">Set Exact Quantity</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>Quantity</label>
+            <input type="number" id="stockQty" placeholder="Enter quantity" min="0" step="0.01">
+          </div>
+          <div class="field-group">
+            <label>Note (optional)</label>
+            <input type="text" id="stockNote" placeholder="e.g. Morning delivery, used for dinner">
+          </div>
+        </div>
+        <button class="btn-primary" onclick="updateStock()">Update Stock</button>
+        <div id="stockMsg" class="success-msg"></div>
+      </div>
+
+      <div class="form-card">
+        <h3>Quick Stock Overview</h3>
+        <div id="quickOverview" class="quick-grid"></div>
+      </div>
+    </div>
+
+    <!-- LOW STOCK -->
+    <div class="page" id="page-lowstock">
+      <div class="alert-banner" id="alertBanner">
+        <span>⚠️ Items below minimum stock level</span>
+      </div>
+      <div class="table-wrap">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Category</th>
+              <th>Current Stock</th>
+              <th>Minimum Required</th>
+              <th>Unit</th>
+              <th>Shortage</th>
+            </tr>
+          </thead>
+          <tbody id="lowStockBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AUDIT LOG -->
+    <div class="page" id="page-auditlog">
+      <div class="page-controls">
+        <input type="date" id="logDate" class="select-styled">
+        <select id="logUser" class="select-styled">
+          <option value="">All Users</option>
+        </select>
+        <button class="btn-secondary" onclick="filterAuditLog()">Filter</button>
+        <button class="btn-secondary" onclick="loadAuditLog()">Reset</button>
+      </div>
+      <div class="table-wrap">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th>Date & Time</th>
+              <th>User</th>
+              <th>Action</th>
+              <th>Item</th>
+              <th>Change</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody id="auditBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- USERS (Master only) -->
+    <div class="page master-only" id="page-users">
+      <div class="page-controls">
+        <button class="btn-primary" onclick="openUserModal()">+ Add Employee</button>
+      </div>
+      <div class="table-wrap">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CATEGORIES (Master only) -->
+    <div class="page master-only" id="page-categories">
+      <div class="page-controls">
+        <button class="btn-primary" onclick="openCatModal()">+ Add Category</button>
+      </div>
+      <div class="categories-grid" id="categoriesGrid"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODALS -->
+
+<!-- Add/Edit Item Modal -->
+<div class="modal-overlay" id="itemModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="itemModalTitle">Add New Item</h3>
+      <button class="modal-close" onclick="closeModal('itemModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field-group">
+          <label>Item Name *</label>
+          <input type="text" id="itemName" placeholder="e.g. Kingfisher Beer">
+        </div>
+        <div class="field-group">
+          <label>Category *</label>
+          <select id="itemCategory" class="select-styled"></select>
+        </div>
+        <div class="field-group">
+          <label>Quantity *</label>
+          <input type="number" id="itemQty" placeholder="0" min="0" step="0.01">
+        </div>
+        <div class="field-group">
+          <label>Unit *</label>
+          <select id="itemUnit" class="select-styled">
+            <option value="pcs">Pieces (pcs)</option>
+            <option value="kg">Kilogram (kg)</option>
+            <option value="g">Gram (g)</option>
+            <option value="ltr">Litre (ltr)</option>
+            <option value="ml">Millilitre (ml)</option>
+            <option value="bottle">Bottle</option>
+            <option value="crate">Crate</option>
+            <option value="box">Box</option>
+            <option value="dozen">Dozen</option>
+            <option value="plate">Plate</option>
+            <option value="packet">Packet</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Minimum Stock Level</label>
+          <input type="number" id="itemMin" placeholder="Alert when below this" min="0" step="0.01">
+        </div>
+        <div class="field-group">
+          <label>Description</label>
+          <input type="text" id="itemDesc" placeholder="Optional notes">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('itemModal')">Cancel</button>
+      <button class="btn-primary" onclick="saveItem()">Save Item</button>
+    </div>
+    <input type="hidden" id="editItemId">
+  </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add Employee Account</h3>
+      <button class="modal-close" onclick="closeModal('userModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field-group">
+          <label>Full Name *</label>
+          <input type="text" id="userName" placeholder="Employee name">
+        </div>
+        <div class="field-group">
+          <label>Username *</label>
+          <input type="text" id="userUsername" placeholder="Login username">
+        </div>
+        <div class="field-group">
+          <label>Password *</label>
+          <input type="password" id="userPass" placeholder="Set password">
+        </div>
+        <div class="field-group">
+          <label>Role</label>
+          <select id="userRole" class="select-styled">
+            <option value="staff">Staff</option>
+            <option value="manager">Manager</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('userModal')">Cancel</button>
+      <button class="btn-primary" onclick="saveUser()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- Category Modal -->
+<div class="modal-overlay" id="catModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Add Category</h3>
+      <button class="modal-close" onclick="closeModal('catModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-group">
+        <label>Category Name *</label>
+        <input type="text" id="catName" placeholder="e.g. Seafood, Spirits, Beverages">
+      </div>
+      <div class="field-group">
+        <label>Icon (emoji)</label>
+        <input type="text" id="catIcon" placeholder="e.g. 🍺 🐟 🥃">
+      </div>
+      <div class="field-group">
+        <label>Color</label>
+        <input type="color" id="catColor" value="#1a7f74">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('catModal')">Cancel</button>
+      <button class="btn-primary" onclick="saveCategory()">Save</button>
+    </div>
+    <input type="hidden" id="editCatId">
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
