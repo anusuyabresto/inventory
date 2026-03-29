@@ -1,25 +1,16 @@
 {
   "name": "Anusuya Restaurant & Bar — Inventory",
-  "short_name": "Anusuya Inventory",
-  "description": "Premium Inventory Management System for Anusuya Restaurant & Bar",
-  "start_url": "/index.html",
+  "short_name": "Anusuya Inv",
+  "description": "Inventory Management for Anusuya Restaurant & Bar",
+  "start_url": "/inventory/",
+  "scope": "/inventory/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
+  "background_color": "#1a0f0a",
   "theme_color": "#c9972a",
   "orientation": "portrait-primary",
   "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
   ],
   "categories": ["business", "productivity"],
   "lang": "en-IN"

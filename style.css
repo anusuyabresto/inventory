@@ -2,26 +2,27 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
 
 :root {
+  /* Anusuya Restaurant Theme — Teal ceiling, Dark wood, Gold accents */
   --gold: #c9972a;
   --gold2: #e8b84b;
   --gold-bg: #fdf3dc;
-  --teal: #0e9b8c;
+  --teal: #0e9b8c;        /* Restaurant teal ceiling */
   --teal2: #0a7a6e;
   --teal-bg: #e6f7f5;
-  --dark: #0a0a0a;
-  --dark2: #141414;
-  --dark3: #1c1c1c;
+  --dark: #1a0f0a;        /* Dark wood brown */
+  --dark2: #231509;
+  --dark3: #2d1a0d;
   --rust: #b84a2a;
   --rust-bg: #fceee9;
-  --surface: #f5f6fa;
+  --surface: #f7f4f0;     /* Warm marble white */
   --surface2: #ffffff;
-  --border: #e2e6ef;
-  --text: #1a1f2e;
-  --muted: #6b7280;
+  --border: #e8e0d5;
+  --text: #1a120a;        /* Dark wood text */
+  --muted: #7a6a5a;
   --sw: 248px;
   --r: 12px;
-  --sh: 0 2px 16px rgba(0,0,0,.08);
-  --sh2: 0 8px 32px rgba(0,0,0,.14);
+  --sh: 0 2px 16px rgba(26,15,10,.10);
+  --sh2: 0 8px 32px rgba(26,15,10,.18);
   --fd: 'Cinzel', serif;
   --fb: 'DM Sans', sans-serif;
   --fm: 'JetBrains Mono', monospace;
@@ -36,7 +37,7 @@ body{font-family:var(--fb);background:var(--surface);color:var(--text);height:10
 /* ---- LOGIN ---- */
 .login-bg{
   width:100%;
-  background:linear-gradient(135deg,#0a0a0a 0%,#141414 50%,#0d2b27 100%);
+  background:linear-gradient(135deg,#1a0f0a 0%,#0d2015 40%,#0a2820 70%,#151005 100%);
   display:flex;align-items:center;justify-content:center;
   position:relative;overflow:hidden;
 }
