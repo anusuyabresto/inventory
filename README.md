@@ -1,71 +1,126 @@
-# Ansuya Restaurant & Bar — Inventory Management System
-## Setup Guide
+# 🐟 Anusuya Restaurant & Bar — Inventory Management System
+
+## ⚡ SETUP GUIDE — Step by Step
 
 ---
 
-### ✅ Default Login
-- **Username:** `master`
-- **Password:** `ansuya@123`
+## STEP 1 — Firebase Project Banao
+
+1. **https://console.firebase.google.com** pe jao
+2. **"Create a new Firebase project"** click karo
+3. Project name: `anusuya-inventory` (jo chahо)
+4. Google Analytics: **Disable** karo
+5. **"Create project"** click karo
 
 ---
 
-### 🚀 How to Use (Without Firebase — Works Instantly)
-1. Open `index.html` in any browser
-2. Login with master credentials above
-3. All data saves to browser localStorage
-4. You can add employees, categories, inventory items right away
+## STEP 2 — Realtime Database Setup Karo
+
+1. Left sidebar → **"Realtime Database"** click karo
+2. **"Create Database"** click karo
+3. Location: **United States (us-central1)** select karo
+4. Rules: **"Start in test mode"** ✅ select karo
+5. **"Enable"** click karo
 
 ---
 
-### 🔥 Firebase Setup (For Real-Time Sync Across Devices)
+## STEP 3 — Rules Permanent Karo
 
-1. Go to [https://console.firebase.google.com](https://console.firebase.google.com)
-2. Create a new project (e.g., `ansuya-inventory`)
-3. Go to **Realtime Database** → Create Database → Start in **test mode**
-4. Click the **gear icon** → Project Settings → Web App → Register app
-5. Copy the `firebaseConfig` values
-6. Open `app.js` and replace the `firebaseConfig` block at the top:
+1. **Rules** tab click karo
+2. Sab delete karo aur yeh paste karo:
+
+```json
+{
+  "rules": {
+    ".read": true,
+    ".write": true
+  }
+}
+```
+
+3. **"Publish"** click karo ✅
+
+---
+
+## STEP 4 — Web App Register Karo
+
+1. **Project Overview** pe jao
+2. Upar **`</>`** (web icon) click karo
+3. App nickname: `anusuya-web`
+4. **"Register app"** click karo
+5. `firebaseConfig` code copy karo — yeh dikhega:
 
 ```javascript
 const firebaseConfig = {
-  apiKey: "YOUR_REAL_API_KEY",
+  apiKey: "AIzaSy...",
   authDomain: "your-project.firebaseapp.com",
   databaseURL: "https://your-project-default-rtdb.firebaseio.com",
   projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
+  storageBucket: "your-project.firebasestorage.app",
   messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  appId: "1:123456789:web:abc123"
 };
 ```
 
-7. Save the file — now all data syncs live across all devices!
+---
+
+## STEP 5 — Config app.js Mein Daalo
+
+1. `app.js` file open karo
+2. Top pe `firebaseConfig` dhundho
+3. **`YOUR_API_KEY`** wali jagah apna config paste karo
+4. Save karo
 
 ---
 
-### 👤 User Roles
-| Role | Permissions |
-|------|-------------|
-| **Master** | Full access: add/delete users, manage categories, delete items, view all |
-| **Manager** | Add/edit items, update stock, view audit log |
-| **Staff** | Update stock only, view inventory |
+## STEP 6 — GitHub Pe Upload Karo
+
+1. GitHub pe naya repository banao: `inventory`
+2. Saari files upload karo:
+   - `index.html`
+   - `app.js`
+   - `style.css`
+   - `sw.js`
+   - `manifest.json`
+   - `icon-192.png`
+   - `icon-512.png`
+3. **Settings** → **Pages** → Branch: `main` → **Save**
+4. GitHub Pages URL milega: `https://yourusername.github.io/inventory/`
 
 ---
 
-### 📦 Features
-- Live inventory tracking with custom units (pcs, kg, g, ltr, ml, bottle, crate, box, dozen, plate, packet)
-- Category-wise organization with custom icons and colors
-- Stock update audit log with username, date, time
-- Low stock alerts
-- Master can create/delete employee accounts with passwords
-- Firebase Realtime Database support for multi-device sync
-- Works offline with localStorage fallback
+## STEP 7 — Login Karo ✅
+
+- **Username:** `master`
+- **Password:** `ansuya@123`
+
+> ⚠️ Pehli baar login pe app automatically master account aur default data create kar dega!
 
 ---
 
-### 📱 Units Supported
-`pcs` `kg` `g` `ltr` `ml` `bottle` `crate` `box` `dozen` `plate` `packet`
+## 🔑 Default Login
+
+| Field | Value |
+|-------|-------|
+| Username | `master` |
+| Password | `ansuya@123` |
+| Role | Master Admin |
 
 ---
 
-### 🐟 Fresh Catch Board
-The whiteboard in your photos shows: Kingfish, Chonak, Squids, Lepo, Prawns, Mackerel — all pre-loaded as sample items!
+## ❓ Agar Login Na Ho
+
+1. Firebase Console → Realtime Database → **Rules** check karo
+2. `.read: true` aur `.write: true` hona chahiye
+3. **Publish** kiya hua ho
+4. Browser mein page **hard refresh** karo (Ctrl + Shift + R)
+
+---
+
+## 📱 PWA Install
+
+Mobile pe browser mein open karo → **"Add to Home Screen"** option aayega → Install karo
+
+---
+
+*Developed by Aarav (Ravi) | Anusuya Inventory System v2.0*

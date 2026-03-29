@@ -7,41 +7,52 @@
 // ----------------------------------------------------------------
 // FIREBASE CONFIG — Paste your config here
 // ----------------------------------------------------------------
+// ⚠️ APNA FIREBASE CONFIG YAHAN PASTE KARO
+// Firebase Console > Project Settings > Your Apps > SDK setup
 const firebaseConfig = {
-  apiKey: "AIzaSyC1biPm621HHU-0nRPlMQS-bZrFmP_i9VE",
-  authDomain: "anusuya-inventory-2.firebaseapp.com",
-  databaseURL: "https://anusuya-inventory-2-default-rtdb.firebaseio.com",
-  projectId: "anusuya-inventory-2",
-  storageBucket: "anusuya-inventory-2.firebasestorage.app",
-  messagingSenderId: "143200101873",
-  appId: "1:143200101873:web:7960b61e5ab7fcf88f9050"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.firebasestorage.app",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 // ----------------------------------------------------------------
 // INIT FIREBASE
 // ----------------------------------------------------------------
 let db = null;
-try {
-  firebase.initializeApp(firebaseConfig);
-  db = firebase.database();
-  console.log("✅ Firebase connected — Anusuya Inventory");
+let firebaseReady = false;
 
-  // Connection state monitor
-  db.ref('.info/connected').on('value', (snap) => {
-    if (snap.val() === true) {
-      console.log("🟢 Firebase ONLINE");
-      const el = document.getElementById('loginError');
-      if (el && el.textContent === 'Connection error. Check internet.') {
-        el.textContent = '';
-      }
-    } else {
-      console.warn("🔴 Firebase OFFLINE");
+function initFirebase() {
+  try {
+    if (firebase.apps.length === 0) {
+      firebase.initializeApp(firebaseConfig);
     }
-  });
-} catch(e) {
-  console.error("Firebase init error:", e);
-  alert("Firebase connection failed: " + e.message);
+    db = firebase.database();
+    firebaseReady = true;
+    console.log("✅ Firebase connected — Anusuya Inventory");
+
+    // Connection state monitor
+    db.ref('.info/connected').on('value', (snap) => {
+      if (snap.val() === true) {
+        console.log("🟢 Firebase ONLINE");
+        const el = document.getElementById('loginError');
+        if (el && el.textContent.includes('Connection')) {
+          el.textContent = '';
+        }
+      } else {
+        console.warn("🔴 Firebase OFFLINE / Connecting...");
+      }
+    });
+  } catch(e) {
+    console.error("Firebase init error:", e);
+    firebaseReady = false;
+  }
 }
+
+initFirebase();
 
 // ----------------------------------------------------------------
 // GLOBAL STATE
@@ -127,26 +138,19 @@ function initLogin() {
     document.getElementById('loginError').textContent = '';
 
     try {
-      if (!db) { showLoginError('Firebase not connected. Refresh page.'); return; }
+      if (!db || !firebaseReady) {
+        showLoginError('Firebase not connected. Page reload kar!');
+        return;
+      }
+
+      showLoginError('Connecting...');
+
+      // Ensure master exists
+      await ensureMasterAccount();
 
       const users = await fbGet('users');
       if (!users) {
-        // Try to create master account again
-        showLoginError('Creating admin account...');
-        await ensureMasterAccount();
-        // Retry
-        const users2 = await fbGet('users');
-        if (!users2) { showLoginError('DB empty. Check Firebase Rules (read/write: true).'); return; }
-        const user2 = Object.values(users2).find(u =>
-          u.username === username && u.password === password
-        );
-        if (user2) {
-          currentUser = user2;
-          sessionStorage.setItem('anusuya_user', JSON.stringify(user2));
-          await enterApp();
-          return;
-        }
-        showLoginError('Invalid username or password.');
+        showLoginError('Database empty. Firebase Rules check karo (read/write: true).');
         return;
       }
 
@@ -157,13 +161,14 @@ function initLogin() {
       if (user) {
         currentUser = user;
         sessionStorage.setItem('anusuya_user', JSON.stringify(user));
+        showLoginError('');
         await enterApp();
       } else {
         showLoginError('Invalid username or password.');
       }
     } catch(err) {
       console.error('Login error:', err);
-      showLoginError('Connection error: ' + err.message);
+      showLoginError('Error: ' + err.message);
     }
   });
 
@@ -204,17 +209,27 @@ async function enterApp() {
 }
 
 async function ensureMasterAccount() {
-  const exists = await fbGet('users/master');
-  if (!exists) {
-    await fbSet('users/master', {
-      name: 'Master Admin',
-      username: 'master',
-      password: 'ansuya@123',
-      role: 'master',
-      createdAt: Date.now()
-    });
+  if (!db || !firebaseReady) {
+    console.warn("DB not ready, skipping ensureMasterAccount");
+    return;
   }
-  await ensureDefaultData();
+  try {
+    const exists = await fbGet('users/master');
+    if (!exists) {
+      console.log("Creating master account...");
+      await fbSet('users/master', {
+        name: 'Master Admin',
+        username: 'master',
+        password: 'ansuya@123',
+        role: 'master',
+        createdAt: Date.now()
+      });
+      console.log("✅ Master account created!");
+    }
+    await ensureDefaultData();
+  } catch(e) {
+    console.error("ensureMasterAccount error:", e);
+  }
 }
 
 async function ensureDefaultData() {
@@ -363,6 +378,54 @@ function showToast(msg, type='ok') {
   setTimeout(() => t.className = 'toast', 3200);
 }
 
+
+// ----------------------------------------------------------------
+// SMART DISPLAY — Auto decompose base qty into Bulk/Pack/Base
+// ----------------------------------------------------------------
+function decomposeQty(item) {
+  // Uses existing sealedQty + looseQty + capacity
+  // factor1 = bulkToPack (e.g. crate has 12 bottles) — stored as bulkToPack
+  // factor2 = packToBase (e.g. bottle = 750ml) — stored as capacity
+  const f1 = item.bulkToPack || 1;   // Bulk→Pack (new field, default 1)
+  const f2 = item.capacity || 1;      // Pack→Base (existing capacity field)
+  const baseTotal = Math.round(((item.sealedQty || 0) * f2) + (item.looseQty || 0));
+
+  if (f1 > 1) {
+    // 3-level: Bulk / Pack / Base
+    const bulkCount = Math.floor(baseTotal / (f1 * f2));
+    const rem1      = baseTotal % (f1 * f2);
+    const packCount = Math.floor(rem1 / f2);
+    const baseCount = parseFloat((rem1 % f2).toFixed(3));
+    const parts = [];
+    if (bulkCount > 0) parts.push(`${bulkCount} ${item.bulkUnit || 'bulk'}`);
+    if (packCount > 0) parts.push(`${packCount} ${item.sealedUnit || 'pack'}`);
+    if (baseCount > 0 || parts.length === 0) parts.push(`${baseCount} ${item.looseUnit || 'base'}`);
+    return parts.join(' + ');
+  } else {
+    // 2-level: Pack / Base (existing behaviour, enhanced)
+    const packCount = Math.floor(baseTotal / f2);
+    const baseCount = parseFloat((baseTotal % f2).toFixed(3));
+    const parts = [];
+    if (packCount > 0) parts.push(`${packCount} ${item.sealedUnit || 'pack'}`);
+    if (baseCount > 0 || parts.length === 0) parts.push(`${baseCount} ${item.looseUnit || 'base'}`);
+    return parts.join(' + ');
+  }
+}
+
+function totalBaseQty(item) {
+  const f2 = item.capacity || 1;
+  return Math.round(((item.sealedQty || 0) * f2) + (item.looseQty || 0));
+}
+
+function stockValue(item) {
+  if (!item.avgCostPerBase || !item.capacity) return 0;
+  return (totalBaseQty(item) * (item.avgCostPerBase || 0));
+}
+
+function fmtINR(n) {
+  return '₹' + parseFloat(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 async function getCats() { return (await fbGet('categories')) || {}; }
 async function getItems() { return (await fbGet('items')) || {}; }
 async function getLogs() { return (await fbGet('auditlog')) || {}; }
@@ -395,11 +458,13 @@ async function renderDashboard() {
   const today = new Date(); today.setHours(0,0,0,0);
   const todayLogs = Object.values(logs).filter(l => l.timestamp >= today.getTime());
 
+  const totalVal = itemArr.reduce((sum, i) => sum + stockValue(i), 0);
   document.getElementById('statsRow').innerHTML = `
     <div class="sc g"><div class="sc-icon">📦</div><div><div class="sc-num">${itemArr.length}</div><div class="sc-lbl">Total Items</div></div></div>
     <div class="sc r"><div class="sc-icon">⚠️</div><div><div class="sc-num">${lowItems.length}</div><div class="sc-lbl">Low / Out Stock</div></div></div>
     <div class="sc t"><div class="sc-icon">🗂️</div><div><div class="sc-num">${catArr.length}</div><div class="sc-lbl">Categories</div></div></div>
     <div class="sc d"><div class="sc-icon">🔄</div><div><div class="sc-num">${todayLogs.length}</div><div class="sc-lbl">Today's Updates</div></div></div>
+    <div class="sc g"><div class="sc-icon">💰</div><div><div class="sc-num" style="font-size:16px">${fmtINR(totalVal)}</div><div class="sc-lbl">Stock Value</div></div></div>
   `;
 
   // Category bars
@@ -474,8 +539,9 @@ function filterInventory(items, cats) {
       <td>${catIcon(cats, item.catId)} ${catName(cats, item.catId)}</td>
       <td><span class="qty-n qty-s">${item.sealedQty || 0}</span> <span class="badge" style="font-size:10px">${item.sealedUnit || '—'}</span></td>
       <td><span class="qty-n qty-l">${item.looseQty || 0}</span> <span class="badge" style="font-size:10px">${item.looseUnit || '—'}</span></td>
-      <td class="qty-n" style="color:var(--muted)">${((item.sealedQty||0) * (item.capacity||1) + (item.looseQty||0)).toFixed(2)} ${item.looseUnit||''}</td>
-      <td><span class="badge" style="background:var(--surface);color:var(--muted)">${item.looseUnit || '—'}</span></td>
+      <td class="qty-n" style="color:var(--teal);font-size:11px">${decomposeQty(item)}</td>
+      <td style="font-size:11px;color:var(--gold)">${item.avgCostPerBase ? fmtINR(item.avgCostPerBase) + '/' + (item.looseUnit||'unit') : '—'}</td>
+      <td style="font-size:11px;font-weight:600;color:var(--muted)">${item.avgCostPerBase ? fmtINR(stockValue(item)) : '—'}</td>
       <td style="font-size:12px;font-family:var(--fm)"><span style="color:var(--teal)">${item.minSealed||0} ${item.sealedUnit||''}</span> / <span style="color:var(--gold)">${item.minLoose||0} ${item.looseUnit||''}</span></td>
       <td>${statusBadge(item)}</td>
       <td><div style="font-size:11px"><div style="font-weight:600">${item.lastUpdatedByName||'—'}</div><div style="color:var(--muted)">${fmtDate(item.lastUpdatedAt)}</div></div></td>
@@ -487,7 +553,7 @@ function filterInventory(items, cats) {
       </td>
     </tr>
   `).join('') :
-    `<tr><td colspan="10" class="empty"><span class="emp-i">📦</span>No items found</td></tr>`;
+    `<tr><td colspan="11" class="empty"><span class="emp-i">📦</span>No items found</td></tr>`;
 }
 
 // ----------------------------------------------------------------
@@ -875,7 +941,7 @@ async function deleteCat(id) {
 async function openItemModal() {
   document.getElementById('itemMoTitle').textContent = 'Add New Item';
   document.getElementById('editItemId').value = '';
-  ['iName','iSealedQty','iLooseQty','iCapacity','iMinSealed','iMinLoose','iDesc'].forEach(id => {
+  ['iName','iSealedQty','iLooseQty','iCapacity','iMinSealed','iMinLoose','iDesc','iBulkUnit','iBulkToPack','iAvgCost'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('iSealedUnit').value = 'bottle';
@@ -896,6 +962,9 @@ async function openEditItem(id) {
   document.getElementById('iMinSealed').value = item.minSealed||0;
   document.getElementById('iMinLoose').value = item.minLoose||0;
   document.getElementById('iDesc').value = item.description||'';
+  document.getElementById('iBulkUnit').value = item.bulkUnit||'';
+  document.getElementById('iBulkToPack').value = item.bulkToPack||0;
+  document.getElementById('iAvgCost').value = item.avgCostPerBase||'';
   document.getElementById('iSealedUnit').value = item.sealedUnit||'bottle';
   document.getElementById('iLooseUnit').value = item.looseUnit||'ml';
   await populateItemCatDropdown(item.catId);
@@ -921,6 +990,9 @@ async function saveItem() {
   const minSealed = parseFloat(document.getElementById('iMinSealed').value)||0;
   const minLoose = parseFloat(document.getElementById('iMinLoose').value)||0;
   const description = document.getElementById('iDesc').value.trim();
+  const bulkUnit = document.getElementById('iBulkUnit').value.trim();
+  const bulkToPack = parseFloat(document.getElementById('iBulkToPack').value)||0;
+  const avgCostPerBase = parseFloat(document.getElementById('iAvgCost').value)||0;
 
   if (!name) { showToast('Item name required', 'warn'); return; }
   if (!catId) { showToast('Category required', 'warn'); return; }
@@ -932,7 +1004,7 @@ async function saveItem() {
   const itemData = {
     id: itemId, name, catId, sealedQty, looseQty,
     sealedUnit, looseUnit, capacity, minSealed, minLoose,
-    description,
+    description, bulkUnit, bulkToPack, avgCostPerBase,
     lastUpdatedBy: currentUser.username,
     lastUpdatedByName: currentUser.name,
     lastUpdatedAt: Date.now(),
@@ -1006,11 +1078,14 @@ function renderPurchaseRows() {
         <option value="">-- Select Item --</option>${itemsOpts}
       </select>
       <select class="sel" onchange="updatePurchaseRow(${idx},'container',this.value)">
-        <option value="sealed" ${row.container==='sealed'?'selected':''}>Sealed</option>
-        <option value="loose" ${row.container==='loose'?'selected':''}>Loose</option>
+        <option value="sealed" ${row.container==='sealed'?'selected':''}>Sealed (Pack)</option>
+        <option value="bulk" ${row.container==='bulk'?'selected':''}>Bulk (Crate/Carton)</option>
+        <option value="loose" ${row.container==='loose'?'selected':''}>Loose (Base Unit)</option>
       </select>
       <input type="number" class="inp" placeholder="Qty" value="${row.qty}" min="0" step="0.001"
         onchange="updatePurchaseRow(${idx},'qty',this.value)">
+      <input type="number" class="inp" placeholder="Price (₹) total" value="${row.price||''}" min="0" step="0.01"
+        onchange="updatePurchaseRow(${idx},'price',this.value)">
       <input type="text" class="inp" placeholder="Note (optional)" value="${row.note}"
         onchange="updatePurchaseRow(${idx},'note',this.value)">
       <button class="pur-del" onclick="removePurchaseRow(${idx})">✕</button>
@@ -1035,15 +1110,41 @@ async function savePurchaseToStock() {
     const item = await fbGet('items/' + row.itemId);
     if (!item) continue;
     const qty = parseFloat(row.qty);
+    const price = parseFloat(row.price) || 0;
+    const f1 = item.bulkToPack || 1;
+    const f2 = item.capacity || 1;
+
     let updates = { lastUpdatedBy: currentUser.username, lastUpdatedByName: currentUser.name, lastUpdatedAt: Date.now() };
     let change = '';
-    if (row.container === 'sealed') {
+    let newBaseQty = 0;
+
+    // Convert purchase qty to base units
+    if (row.container === 'bulk') {
+      newBaseQty = qty * f1 * f2;
+      updates.sealedQty = (item.sealedQty||0) + (qty * f1);
+      change = `+${qty} ${item.bulkUnit||'bulk'} (+${qty*f1} ${item.sealedUnit} / +${newBaseQty} ${item.looseUnit})`;
+    } else if (row.container === 'sealed') {
+      newBaseQty = qty * f2;
       updates.sealedQty = (item.sealedQty||0) + qty;
-      change = `+${qty} ${item.sealedUnit} sealed`;
+      change = `+${qty} ${item.sealedUnit} (+${newBaseQty} ${item.looseUnit})`;
     } else {
+      newBaseQty = qty;
       updates.looseQty = (item.looseQty||0) + qty;
       change = `+${qty} ${item.looseUnit} loose`;
     }
+
+    // Weighted Average Cost
+    if (price > 0 && newBaseQty > 0) {
+      const oldBase = totalBaseQty(item);
+      const oldCost = item.avgCostPerBase || 0;
+      const newCostPerBase = price / newBaseQty;
+      const weightedAvg = oldBase > 0
+        ? ((oldBase * oldCost) + (newBaseQty * newCostPerBase)) / (oldBase + newBaseQty)
+        : newCostPerBase;
+      updates.avgCostPerBase = parseFloat(weightedAvg.toFixed(4));
+      change += ` | ₹${price} (Avg: ₹${weightedAvg.toFixed(2)}/${item.looseUnit||'unit'})`;
+    }
+
     await fbUpdate('items/' + row.itemId, updates);
     await logAction(row.itemId, item.name, 'purchase/restock', row.container, change, row.note||'Purchase entry');
   }
@@ -1062,12 +1163,12 @@ async function savePurchaseToStock() {
 // Excel download using SheetJS
 async function downloadInventoryExcel() {
   const [items, cats] = await Promise.all([getItems(), getCats()]);
-  const rows = [['Item Name','Category','Sealed Qty','Sealed Unit','Loose Qty','Loose Unit','Total (in loose unit)','Min Sealed','Min Loose','Status','Last Updated By','Last Updated']];
+  const rows = [['Item Name','Category','Sealed Qty','Sealed Unit','Loose Qty','Loose Unit','Smart Total','Avg Cost/Base Unit','Stock Value (₹)','Min Sealed','Min Loose','Status','Last Updated By','Last Updated']];
   Object.values(items).sort((a,b)=>a.name.localeCompare(b.name)).forEach(i => {
     const total = (i.sealedQty||0)*(i.capacity||1)+(i.looseQty||0);
     const status = (i.sealedQty||0)+(i.looseQty||0) <= 0 ? 'Out of Stock' :
       ((i.sealedQty||0)<=(i.minSealed||0)||(i.looseQty||0)<(i.minLoose||0)) ? 'Low Stock' : 'In Stock';
-    rows.push([i.name, catName(cats,i.catId), i.sealedQty||0, i.sealedUnit||'', i.looseQty||0, i.looseUnit||'', total.toFixed(2), i.minSealed||0, i.minLoose||0, status, i.lastUpdatedByName||'', fmtDate(i.lastUpdatedAt)]);
+    rows.push([i.name, catName(cats,i.catId), i.sealedQty||0, i.sealedUnit||'', i.looseQty||0, i.looseUnit||'', decomposeQty(i), (i.avgCostPerBase||0).toFixed(4), stockValue(i).toFixed(2), i.minSealed||0, i.minLoose||0, status, i.lastUpdatedByName||'', fmtDate(i.lastUpdatedAt)]);
   });
   downloadXLSX(rows, 'Anusuya_Inventory_' + todayStr());
 }
