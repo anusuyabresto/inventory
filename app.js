@@ -26,8 +26,22 @@ try {
   firebase.initializeApp(firebaseConfig);
   db = firebase.database();
   console.log("✅ Firebase connected — Anusuya Inventory");
+
+  // Connection state monitor
+  db.ref('.info/connected').on('value', (snap) => {
+    if (snap.val() === true) {
+      console.log("🟢 Firebase ONLINE");
+      const el = document.getElementById('loginError');
+      if (el && el.textContent === 'Connection error. Check internet.') {
+        el.textContent = '';
+      }
+    } else {
+      console.warn("🔴 Firebase OFFLINE");
+    }
+  });
 } catch(e) {
   console.error("Firebase init error:", e);
+  alert("Firebase connection failed: " + e.message);
 }
 
 // ----------------------------------------------------------------
@@ -114,8 +128,28 @@ function initLogin() {
     document.getElementById('loginError').textContent = '';
 
     try {
+      if (!db) { showLoginError('Firebase not connected. Refresh page.'); return; }
+
       const users = await fbGet('users');
-      if (!users) { showLoginError('No users found. Contact admin.'); return; }
+      if (!users) {
+        // Try to create master account again
+        showLoginError('Creating admin account...');
+        await ensureMasterAccount();
+        // Retry
+        const users2 = await fbGet('users');
+        if (!users2) { showLoginError('DB empty. Check Firebase Rules (read/write: true).'); return; }
+        const user2 = Object.values(users2).find(u =>
+          u.username === username && u.password === password
+        );
+        if (user2) {
+          currentUser = user2;
+          sessionStorage.setItem('anusuya_user', JSON.stringify(user2));
+          await enterApp();
+          return;
+        }
+        showLoginError('Invalid username or password.');
+        return;
+      }
 
       const user = Object.values(users).find(u =>
         u.username === username && u.password === password
@@ -129,7 +163,8 @@ function initLogin() {
         showLoginError('Invalid username or password.');
       }
     } catch(err) {
-      showLoginError('Connection error. Check internet.');
+      console.error('Login error:', err);
+      showLoginError('Connection error: ' + err.message);
     }
   });
 
