@@ -115,6 +115,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     await enterApp();
   }
 
+  // Inject activity ticker element
+  if (!document.getElementById('activityTicker')) {
+    const ticker = document.createElement('div');
+    ticker.id = 'activityTicker';
+    ticker.style.cssText = `
+      position:fixed; bottom:70px; left:50%; transform:translateX(-50%);
+      background:rgba(10,10,10,0.92); color:#fff; padding:10px 20px;
+      border-radius:30px; font-size:13px; border:1px solid var(--gold,#c9972a);
+      z-index:9999; max-width:90vw; text-align:center;
+      opacity:0; transition:opacity 0.4s; pointer-events:none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    `;
+    const style = document.createElement('style');
+    style.textContent = '#activityTicker.show { opacity: 1 !important; }';
+    document.head.appendChild(style);
+    document.body.appendChild(ticker);
+  }
+
   // PWA install
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -175,12 +193,14 @@ function initLogin() {
   document.getElementById('logoutBtn').addEventListener('click', () => {
     currentUser = null;
     sessionStorage.removeItem('anusuya_user');
+    // Stop real-time listeners
+    _rtListeners.forEach(ref => ref.off());
+    _rtListeners = [];
+    db.ref('/').off();
     document.getElementById('appScreen').classList.remove('active');
     document.getElementById('loginScreen').classList.add('active');
     document.getElementById('loginUser').value = '';
     document.getElementById('loginPass').value = '';
-    // Remove Firebase listeners
-    db.ref('/').off();
   });
 }
 
@@ -189,23 +209,75 @@ function showLoginError(msg) {
 }
 
 async function enterApp() {
-  // ensureMasterAccount already called on init, skip here
+  try {
+    document.getElementById('loginScreen').classList.remove('active');
+    document.getElementById('appScreen').classList.add('active');
 
-  document.getElementById('loginScreen').classList.remove('active');
-  document.getElementById('appScreen').classList.add('active');
+    document.getElementById('sbName').textContent = currentUser.name;
+    document.getElementById('sbRole').textContent =
+      currentUser.role === 'master' ? 'Master Admin' :
+      currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+    document.getElementById('sbAv').textContent = currentUser.name.charAt(0).toUpperCase();
 
-  document.getElementById('sbName').textContent = currentUser.name;
-  document.getElementById('sbRole').textContent =
-    currentUser.role === 'master' ? 'Master Admin' :
-    currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
-  document.getElementById('sbAv').textContent = currentUser.name.charAt(0).toUpperCase();
+    // Hide master-only nav for non-master
+    document.querySelectorAll('.mo').forEach(el => {
+      el.style.display = (currentUser.role !== 'master') ? 'none' : '';
+    });
 
-  // Hide master-only nav for non-master
-  document.querySelectorAll('.mo').forEach(el => {
-    el.style.display = (currentUser.role !== 'master') ? 'none' : '';
+    navigateTo('dashboard');
+    startRealtimeListeners();
+  } catch(e) {
+    console.error('enterApp error:', e);
+    alert('App load error: ' + e.message + '\nPage refresh karo.');
+  }
+}
+
+// ----------------------------------------------------------------
+// REAL-TIME LISTENERS — Live Firebase updates
+// ----------------------------------------------------------------
+let _rtListeners = [];
+
+function startRealtimeListeners() {
+  // Clear old listeners
+  _rtListeners.forEach(ref => ref.off());
+  _rtListeners = [];
+
+  // 1. Live activity ticker — shows every DB change instantly
+  const auditRef = db.ref('auditlog').orderByChild('timestamp').limitToLast(1);
+  auditRef.on('child_added', (snap) => {
+    const log = snap.val();
+    if (!log || !log.timestamp) return;
+    // Only show recent (last 10 seconds) — not old ones on load
+    if (Date.now() - log.timestamp > 10000) return;
+    showActivityTicker(log);
+    // Refresh current page if relevant
+    if (currentPage === 'dashboard') renderDashboard();
+    if (currentPage === 'audit') renderAudit();
   });
+  _rtListeners.push(auditRef);
 
-  navigateTo('dashboard');
+  // 2. Live items watcher — refresh inventory/stock/dashboard if changed
+  const itemsRef = db.ref('items');
+  itemsRef.on('value', () => {
+    if (currentPage === 'inventory') renderInventory();
+    if (currentPage === 'stock') renderStockPage();
+    if (currentPage === 'lowstock') renderLowStock();
+  });
+  _rtListeners.push(itemsRef);
+}
+
+function showActivityTicker(log) {
+  // Small floating ticker at bottom showing live activity
+  const ticker = document.getElementById('activityTicker');
+  if (!ticker) return;
+  const icon = log.action.includes('add') || log.action.includes('purchase') ? '📦' :
+               log.action.includes('open') ? '🔓' :
+               log.action.includes('consume') || log.action.includes('remove') ? '📤' :
+               log.action.includes('delete') ? '🗑️' :
+               log.action.includes('edit') ? '✏️' : '🔄';
+  ticker.innerHTML = `${icon} <strong>${log.userName}</strong> — ${log.action}: <em>${log.itemName}</em> ${log.change ? '| ' + log.change : ''}`;
+  ticker.classList.add('show');
+  setTimeout(() => ticker.classList.remove('show'), 5000);
 }
 
 async function ensureMasterAccount() {
@@ -435,10 +507,11 @@ function catName(cats, id) { return cats[id]?.name || '—'; }
 function catIcon(cats, id) { return cats[id]?.icon || '📦'; }
 
 function statusBadge(item) {
-  const total = (item.sealedQty || 0) + (item.looseQty || 0);
-  if (total <= 0) return '<span class="badge b-out">Out of Stock</span>';
-  const minT = (item.minSealed || 0) + (item.minLoose || 0);
-  if ((item.sealedQty || 0) <= (item.minSealed || 0) || (item.looseQty || 0) < (item.minLoose || 0))
+  const sQty = item.sealedQty || 0;
+  const lQty = item.looseQty || 0;
+  const baseTotal = totalBaseQty(item);
+  if (baseTotal <= 0) return '<span class="badge b-out">Out of Stock</span>';
+  if (sQty <= (item.minSealed || 0) || lQty < (item.minLoose || 0))
     return '<span class="badge b-low">Low Stock</span>';
   return '<span class="badge b-ok">In Stock</span>';
 }
@@ -447,6 +520,7 @@ function statusBadge(item) {
 // DASHBOARD
 // ----------------------------------------------------------------
 async function renderDashboard() {
+  try {
   const [items, cats, logs] = await Promise.all([getItems(), getCats(), getLogs()]);
   const itemArr = Object.values(items);
   const catArr = Object.values(cats);
@@ -499,6 +573,10 @@ async function renderDashboard() {
       <td>${statusBadge(i)}</td>
     </tr>`).join('') + '</tbody></table>' :
     '<div class="empty" style="padding:20px"><span>✅</span> All items well stocked!</div>';
+  } catch(e) {
+    console.error('renderDashboard error:', e);
+    document.getElementById('statsRow').innerHTML = '<div style="color:red;padding:10px">Dashboard load error: ' + e.message + '</div>';
+  }
 }
 
 // ----------------------------------------------------------------
@@ -529,7 +607,7 @@ function filterInventory(items, cats) {
   if (fltCat) arr = arr.filter(i => i.catId === fltCat);
   if (fltSt === 'ok') arr = arr.filter(i => (i.sealedQty||0) > (i.minSealed||0) && (i.looseQty||0) >= (i.minLoose||0));
   if (fltSt === 'low') arr = arr.filter(i => ((i.sealedQty||0) <= (i.minSealed||0) || (i.looseQty||0) < (i.minLoose||0)) && ((i.sealedQty||0)+(i.looseQty||0)) > 0);
-  if (fltSt === 'out') arr = arr.filter(i => ((i.sealedQty||0) + (i.looseQty||0)) <= 0);
+  if (fltSt === 'out') arr = arr.filter(i => totalBaseQty(i) <= 0);
 
   arr.sort((a,b) => a.name.localeCompare(b.name));
 
