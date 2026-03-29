@@ -8,14 +8,13 @@
 // FIREBASE CONFIG — Paste your config here
 // ----------------------------------------------------------------
 const firebaseConfig = {
-  apiKey: "AIzaSyD2JVvyLhXLpz3Ccp5Xj_Dv6K4G3O9t3ms",
-  authDomain: "anusuya-inventory.firebaseapp.com",
-  databaseURL: "https://anusuya-inventory-default-rtdb.firebaseio.com",
-  projectId: "anusuya-inventory",
-  storageBucket: "anusuya-inventory.firebasestorage.app",
-  messagingSenderId: "408509187920",
-  appId: "1:408509187920:web:81ea96c402601197dfce55",
-  measurementId: "G-YCYLDWBDE5"
+  apiKey: "AIzaSyC1biPm621HHU-0nRPlMQS-bZrFmP_i9VE",
+  authDomain: "anusuya-inventory-2.firebaseapp.com",
+  databaseURL: "https://anusuya-inventory-2-default-rtdb.firebaseio.com",
+  projectId: "anusuya-inventory-2",
+  storageBucket: "anusuya-inventory-2.firebasestorage.app",
+  messagingSenderId: "143200101873",
+  appId: "1:143200101873:web:7960b61e5ab7fcf88f9050"
 };
 
 // ----------------------------------------------------------------
