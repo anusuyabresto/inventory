@@ -73,6 +73,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('sbLogo').src = logoImg.src;
   }
 
+  // Fix: Master account pehle ensure karo, login se pehle
+  try {
+    await ensureMasterAccount();
+  } catch(e) {
+    console.warn('ensureMasterAccount on init failed:', e);
+  }
+
   initLogin();
   initNav();
   startClock();
@@ -143,8 +150,7 @@ function showLoginError(msg) {
 }
 
 async function enterApp() {
-  // Ensure master account exists
-  await ensureMasterAccount();
+  // ensureMasterAccount already called on init, skip here
 
   document.getElementById('loginScreen').classList.remove('active');
   document.getElementById('appScreen').classList.add('active');
