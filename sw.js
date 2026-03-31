@@ -1,5 +1,5 @@
 // Anusuya Inventory — Service Worker v6
-const CACHE = 'anusuya-v6';
+const CACHE = 'anusuya-v8';
 
 self.addEventListener('install', e => {
   self.skipWaiting();

@@ -33,6 +33,7 @@
         </div>
         <button type="submit" class="btn-gold">Sign In →</button>
         <div id="loginError" class="err"></div>
+        <div id="loginLoading" style="text-align:center;margin-top:8px;font-size:12px;color:rgba(255,255,255,.4);display:none">⏳ Connecting to database...</div>
       </form>
     </div>
   </div>
@@ -52,11 +53,13 @@
       <a class="ni active" data-p="dashboard"><i>📊</i> Dashboard</a>
       <a class="ni" data-p="inventory"><i>📦</i> Inventory</a>
       <a class="ni" data-p="stock"><i>🔄</i> Update Stock</a>
+      <a class="ni" data-p="loose"><i>🔓</i> Loose Stock</a>
       <a class="ni" data-p="lowstock"><i>⚠️</i> Low Stock</a>
+      <a class="ni" data-p="expense"><i>💸</i> Daily Expense</a>
       <a class="ni" data-p="audit"><i>📋</i> Audit Log</a>
-      <a class="ni mo" data-p="users"><i>👥</i> Users</a>
-      <a class="ni mo" data-p="categories"><i>🗂️</i> Categories</a>
-      <a class="ni" data-p="purchase"><i>🛒</i> Purchase Entry</a>
+      <a class="ni master-only" data-p="users"><i>👥</i> Users</a>
+      <a class="ni manager-up" data-p="categories"><i>🗂️</i> Categories</a>
+      <a class="ni manager-up" data-p="purchase"><i>🛒</i> Purchase Entry</a>
     </nav>
     <div class="sb-foot">
       <div class="uc">
@@ -92,6 +95,12 @@
           <div class="dcard"><h4>Stock by Category</h4><div id="catBars"></div></div>
           <div class="dcard"><h4>Recent Activity</h4><div id="recentAct"></div></div>
         </div>
+        <!-- Pending Delete Requests (manager/master only) -->
+        <div class="dcard mt16 manager-up" id="pendingDelWrap" style="display:none">
+          <h4 style="color:var(--rust)">🗑️ Pending Delete Requests<span id="pendingDelBadge" style="color:var(--rust);font-weight:700"></span></h4>
+          <div id="pendingDelReqs"></div>
+        </div>
+
         <div class="dcard mt16">
           <h4>⚠️ Low Stock Items</h4>
           <div id="dashLow"></div>
@@ -116,9 +125,10 @@
         <div class="tw"><table class="tbl" id="invTable">
           <thead><tr>
             <th>Item Name</th><th>Category</th>
-            <th>Sealed Qty</th><th>Loose Qty</th><th>Total</th>
-            <th>Unit</th><th>Min Stock</th><th>Status</th>
-            <th>Last Updated By</th><th>Actions</th>
+            <th>Box/Crate</th><th>Sealed</th><th>Loose</th>
+            <th>Smart Total</th><th>Avg Cost</th><th>Stock Value</th>
+            <th>Min Stock</th><th>Status</th>
+            <th>Last Updated</th><th>Actions</th>
           </tr></thead>
           <tbody id="invBody"></tbody>
         </table></div>
@@ -134,10 +144,11 @@
               <select id="stItem" class="sel"><option value="">-- Choose Item --</option></select>
             </div>
             <div class="field">
-              <label>Container Type</label>
-              <select id="stContainer" class="sel">
-                <option value="sealed">Sealed / Intact (Full Bottle / Bag / Packet)</option>
-                <option value="loose">Loose / Open (Already opened)</option>
+              <label>Stock Level</label>
+              <select id="stLevel" class="sel">
+                <option value="box">📦 Level 1 — Box / Crate / Carton</option>
+                <option value="sealed">🍾 Level 2 — Bottle / Packet / Sealed</option>
+                <option value="loose">🔓 Level 3 — Loose / Base Unit (ml/g/pcs)</option>
               </select>
             </div>
             <div class="field">
@@ -168,6 +179,22 @@
         </div>
       </div>
 
+      <!-- LOOSE STOCK -->
+      <div class="page" id="pg-loose">
+        <div class="pc">
+          <h4 style="color:var(--teal)">🔓 Loose Stock — Currently Open Items</h4>
+          <button class="btn-out sm" onclick="downloadLooseStockExcel()">⬇ Download Excel</button>
+          <button class="btn-out sm" onclick="downloadLooseStockPDF()">⬇ Download PDF</button>
+        </div>
+        <div class="tw"><table class="tbl">
+          <thead><tr>
+            <th>Item</th><th>Category</th><th>Loose Qty</th>
+            <th>Cost/Unit</th><th>Loose Value</th><th>Min Loose</th><th>Status</th><th>Last Updated</th>
+          </tr></thead>
+          <tbody id="looseBody"></tbody>
+        </table></div>
+      </div>
+
       <!-- LOW STOCK -->
       <div class="page" id="pg-lowstock">
         <div class="alert-bar">⚠️ Items below minimum required level</div>
@@ -177,8 +204,8 @@
         </div>
         <div class="tw"><table class="tbl">
           <thead><tr>
-            <th>Item</th><th>Category</th><th>Sealed</th><th>Loose</th>
-            <th>Total</th><th>Min Required</th><th>Unit</th><th>Shortage</th>
+            <th>Item</th><th>Category</th><th>Box/Crate</th><th>Sealed</th><th>Loose</th>
+            <th>Min Stock</th><th>Shortage</th>
           </tr></thead>
           <tbody id="lowBody"></tbody>
         </table></div>
@@ -204,8 +231,62 @@
         </table></div>
       </div>
 
+      <!-- DAILY EXPENSE -->
+      <div class="page" id="pg-expense">
+        <div class="fc">
+          <h3>💸 Add Expense</h3>
+          <div class="fg">
+            <div class="field"><label>Date *</label><input type="date" id="expDate" class="inp"></div>
+            <div class="field"><label>Description *</label><input type="text" id="expDesc" class="inp" placeholder="e.g. Fish purchase, Gas bill, Cleaning supplies"></div>
+            <div class="field"><label>Category</label>
+              <select id="expCat" class="sel">
+                <option value="Purchase">Purchase / Restock</option>
+                <option value="Salary">Salary / Wages</option>
+                <option value="Utilities">Utilities (Gas/Electric/Water)</option>
+                <option value="Maintenance">Maintenance / Repairs</option>
+                <option value="Cleaning">Cleaning Supplies</option>
+                <option value="Transport">Transport / Delivery</option>
+                <option value="Miscellaneous">Miscellaneous</option>
+              </select>
+            </div>
+            <div class="field"><label>Amount (₹) *</label><input type="number" id="expAmount" class="inp" placeholder="Enter amount" min="0" step="0.01"></div>
+            <div class="field"><label>Note</label><input type="text" id="expNote" class="inp" placeholder="Additional details (optional)"></div>
+          </div>
+          <button class="btn-gold" onclick="saveExpense()">✅ Save Expense</button>
+        </div>
+
+        <div class="fc">
+          <h3>📋 Expense History</h3>
+          <div class="pc" style="flex-wrap:wrap;gap:8px">
+            <div class="field" style="min-width:150px"><label>From Date</label><input type="date" id="expFromDate" class="inp" onchange="filterExpenses()"></div>
+            <div class="field" style="min-width:150px"><label>To Date</label><input type="date" id="expToDate" class="inp" onchange="filterExpenses()"></div>
+            <div class="field"><label>Category</label>
+              <select id="expCatFilter" class="sel" onchange="filterExpenses()">
+                <option value="">All Categories</option>
+                <option value="Purchase">Purchase</option>
+                <option value="Salary">Salary</option>
+                <option value="Utilities">Utilities</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Cleaning">Cleaning</option>
+                <option value="Transport">Transport</option>
+                <option value="Miscellaneous">Miscellaneous</option>
+              </select>
+            </div>
+            <button class="btn-out sm" onclick="downloadExpenseExcel()">⬇ Excel</button>
+            <button class="btn-out sm" onclick="downloadExpensePDF()">⬇ PDF</button>
+          </div>
+          <div style="padding:8px 0;font-size:15px;font-weight:700;color:var(--rust)">Total: <span id="expTotal">₹0.00</span></div>
+          <div class="tw"><table class="tbl">
+            <thead><tr>
+              <th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Note</th><th>Added By</th><th>Action</th>
+            </tr></thead>
+            <tbody id="expBody"></tbody>
+          </table></div>
+        </div>
+      </div>
+
       <!-- USERS (master only) -->
-      <div class="page mo" id="pg-users">
+      <div class="page master-only" id="pg-users">
         <div class="pc">
           <button class="btn-gold sm" onclick="openUserModal()">+ Add Employee</button>
         </div>
@@ -218,7 +299,7 @@
       </div>
 
       <!-- CATEGORIES (master only) -->
-      <div class="page mo" id="pg-categories">
+      <div class="page manager-up" id="pg-categories">
         <div class="pc">
           <button class="btn-gold sm" onclick="openCatModal()">+ Add Category</button>
         </div>
@@ -244,7 +325,7 @@
           <h3>📋 Recent Purchases</h3>
           <div class="tw"><table class="tbl">
             <thead><tr>
-              <th>Date</th><th>Item</th><th>Qty Added</th><th>Unit</th><th>By</th><th>Note</th>
+              <th>Date</th><th>Item</th><th>Change / Qty Added</th><th>By</th><th>Note</th>
             </tr></thead>
             <tbody id="purchaseHistory"></tbody>
           </table></div>
@@ -261,7 +342,7 @@
       <div class="footer-info">
         <span>Anusuya Restaurant &amp; Bar © 2025</span>
         <span class="footer-dev">Developed by <strong>Aarav (Ravi)</strong></span>
-        <span class="footer-ver">v2.0 — Premium Inventory System</span>
+        <span class="footer-ver">v8 — Premium Inventory System</span>
       </div>
     </footer>
 
@@ -272,42 +353,114 @@
 <!-- Item Modal -->
 <div class="mo-overlay" id="itemModal">
   <div class="mo">
-    <div class="mo-h"><h3 id="itemMoTitle">Add Item</h3><button onclick="closeModal('itemModal')">✕</button></div>
+    <div class="mo-h"><h3 id="itemMoTitle">Add New Item</h3><button onclick="closeModal('itemModal')">✕</button></div>
     <div class="mo-b">
       <div class="fg">
+
+        <!-- Basic Info -->
         <div class="field"><label>Item Name *</label><input type="text" id="iName" class="inp" placeholder="e.g. Kingfisher Beer 650ml"></div>
         <div class="field"><label>Category *</label><select id="iCat" class="sel"></select></div>
-        <div class="field"><label>Sealed Qty (bottles/bags/packets)</label><input type="number" id="iSealedQty" class="inp" placeholder="Intact units" min="0" step="0.001"></div>
-        <div class="field"><label>Loose Qty (already opened)</label><input type="number" id="iLooseQty" class="inp" placeholder="Loose/open quantity" min="0" step="0.001"></div>
-        <div class="field"><label>Sealed Unit</label>
-          <select id="iSealedUnit" class="sel">
-            <option value="bottle">Bottle</option><option value="bag">Bag</option>
-            <option value="packet">Packet</option><option value="carton">Carton/Box</option>
-            <option value="crate">Crate</option><option value="tin">Tin</option>
-            <option value="jar">Jar</option><option value="can">Can</option>
-            <option value="sack">Sack</option><option value="piece">Piece (pcs)</option>
+
+        <!-- Level Count -->
+        <div class="field">
+          <label>Kitne Level mein rakhna hai? *</label>
+          <select id="iLevelCount" class="sel" onchange="onLevelCountChange()">
+            <option value="">-- Select --</option>
+            <option value="1">1 Level — Sirf ek unit (e.g. kg, pcs, plate)</option>
+            <option value="2">2 Level — Container + Pack (e.g. Carton → Bottle)</option>
+            <option value="3">3 Level — Container + Pack + Base (e.g. Crate → Bottle → ml)</option>
           </select>
         </div>
-        <div class="field"><label>Loose Unit (per serve / measure)</label>
-          <select id="iLooseUnit" class="sel">
-            <option value="ml">ml</option><option value="ltr">Litre</option>
-            <option value="g">Gram (g)</option><option value="kg">Kilogram (kg)</option>
-            <option value="pcs">Pieces (pcs)</option><option value="plate">Plate</option>
-            <option value="portion">Portion</option><option value="dozen">Dozen</option>
-          </select>
+
+        <!-- L1: Container -->
+        <div id="grp-L1" style="display:none; border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px; background:var(--surface)">
+          <div style="font-weight:600; color:var(--gold); margin-bottom:10px">📦 Container (Level 1 — Sabse Bada)</div>
+          <div class="fg">
+            <div class="field">
+              <label>Container type</label>
+              <select id="iL1Unit" class="sel"></select>
+            </div>
+            <div class="field" id="grp-L1-custom" style="display:none">
+              <label>Custom naam likho</label>
+              <input type="text" id="iL1UnitCustom" class="inp" placeholder="e.g. dabba, goni">
+            </div>
+            <div class="field" id="grp-L1-to-L2">
+              <label>1 Container mein kitne Pack hote hain?</label>
+              <input type="number" id="iL1ToL2" class="inp" placeholder="e.g. 12 bottles per crate" min="1" step="1">
+            </div>
+            <div class="field">
+              <label>⚠️ Low Stock Alert — kitne Container se kam ho to?</label>
+              <input type="number" id="iMinL1" class="inp" placeholder="e.g. 1" min="0" step="1">
+            </div>
+          </div>
         </div>
-        <div class="field"><label>Sealed Capacity (how much loose per sealed unit)</label>
-          <input type="number" id="iCapacity" class="inp" placeholder="e.g. 750 (ml per bottle), 25 (kg per bag)" min="0" step="0.001">
+
+        <!-- L2: Pack -->
+        <div id="grp-L2" style="display:none; border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px; background:var(--surface)">
+          <div style="font-weight:600; color:var(--teal); margin-bottom:10px" id="grp-L2-title">🍾 Pack (Level 2)</div>
+          <div class="fg">
+            <div class="field">
+              <label>Pack type</label>
+              <select id="iL2Unit" class="sel"></select>
+            </div>
+            <div class="field" id="grp-L2-custom" style="display:none">
+              <label>Custom naam likho</label>
+              <input type="text" id="iL2UnitCustom" class="inp" placeholder="e.g. pouch, dabba">
+            </div>
+            <div class="field" id="grp-L2-to-L3" style="display:none">
+              <label>1 Pack mein kitna Base Unit hota hai?</label>
+              <input type="number" id="iL2ToL3" class="inp" placeholder="e.g. 850 ml per bottle, 1000 g per kg" min="0.001" step="0.001">
+            </div>
+            <div class="field">
+              <label>⚠️ Low Stock Alert — kitne Pack se kam ho to?</label>
+              <input type="number" id="iMinL2" class="inp" placeholder="e.g. 2" min="0" step="0.001">
+            </div>
+          </div>
         </div>
-        <div class="field"><label>Minimum Stock (Sealed)</label><input type="number" id="iMinSealed" class="inp" placeholder="Alert below this" min="0" step="1"></div>
-        <div class="field"><label>Minimum Loose Stock</label><input type="number" id="iMinLoose" class="inp" placeholder="e.g. 90 ml, 500g" min="0" step="0.001"></div>
-        <div class="field"><label>Bulk Unit (optional)</label>
-          <input type="text" id="iBulkUnit" class="inp" placeholder="e.g. crate, carton (khali rakho agar nahi hai)"></div>
-        <div class="field"><label>Bulk to Pack (1 bulk mein kitne pack)</label>
-          <input type="number" id="iBulkToPack" class="inp" placeholder="e.g. 12 bottles per crate. 0 agar nahi hai." min="0" step="1"></div>
-        <div class="field"><label>Purchase Price per Base Unit (₹)</label>
-          <input type="number" id="iAvgCost" class="inp" placeholder="e.g. ₹1.50 per ml, ₹200 per kg" min="0" step="0.01"></div>
-        <div class="field"><label>Description / Notes</label><input type="text" id="iDesc" class="inp" placeholder="Optional"></div>
+
+        <!-- L3: Base Unit -->
+        <div id="grp-L3" style="display:none; border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px; background:var(--surface)">
+          <div style="font-weight:600; color:var(--rust); margin-bottom:10px" id="grp-L3-title">🔓 Base Unit (Level 3 — Sabse Chhota)</div>
+          <div class="fg">
+            <div class="field">
+              <label>Base unit type</label>
+              <select id="iL3Unit" class="sel"></select>
+            </div>
+            <div class="field">
+              <label>⚠️ Low Stock Alert — kitne se kam ho to?</label>
+              <input type="number" id="iMinL3" class="inp" placeholder="e.g. 500 ml, 2 kg" min="0" step="0.001">
+            </div>
+          </div>
+        </div>
+
+        <!-- Starting Stock — single entry point -->
+        <div id="grp-startqty" style="display:none; border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px; background:var(--surface)">
+          <div style="font-weight:600; color:var(--muted); margin-bottom:10px">📊 Starting Stock (Abhi kitna hai?)</div>
+          <div class="fg">
+            <div class="field">
+              <label>Kahan pe stock hai abhi?</label>
+              <select id="iStartLevel" class="sel" onchange="onStartLevelChange()"></select>
+            </div>
+            <div class="field">
+              <label id="iStartQtyLabel">Quantity</label>
+              <input type="number" id="iStartQty" class="inp" placeholder="0" min="0" step="0.001" value="0">
+            </div>
+          </div>
+        </div>
+
+        <!-- Purchase Price -->
+        <div id="grp-price" style="display:none; border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px; background:var(--surface)">
+          <div style="font-weight:600; color:var(--muted); margin-bottom:10px">💰 Purchase Price</div>
+          <div class="field">
+            <label id="price-label">Price (₹)</label>
+            <input type="number" id="iPurchasePrice" class="inp" placeholder="e.g. 850" min="0" step="0.01">
+            <div id="price-hint" style="font-size:11px; color:var(--muted); margin-top:4px"></div>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="field"><label>Notes (optional)</label><input type="text" id="iDesc" class="inp" placeholder="Optional"></div>
+
       </div>
     </div>
     <div class="mo-f">
@@ -364,13 +517,44 @@
     <div class="mo-h"><h3>🔓 Open Sealed Unit</h3><button onclick="closeModal('openSealedModal')">✕</button></div>
     <div class="mo-b">
       <p id="openSealedMsg" style="margin-bottom:14px;line-height:1.6"></p>
-      <div class="field"><label>How many sealed units to open?</label>
+      <div class="field"><label>Kaunsa level open karna hai?</label>
+        <select id="openLevelSel" class="sel">
+          <option value="box">📦 Box/Crate → Bottles (Level 1→2)</option>
+          <option value="sealed">🍾 Bottle → Loose/ml (Level 2→3)</option>
+        </select>
+      </div>
+      <div class="field"><label>Kitne open karni hain?</label>
         <input type="number" id="openSealedCount" class="inp" value="1" min="1" step="1">
       </div>
     </div>
     <div class="mo-f">
       <button class="btn-out" onclick="closeModal('openSealedModal')">Cancel</button>
       <button class="btn-gold" onclick="confirmOpenSealed()">Open &amp; Transfer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="mo-overlay" id="deleteConfirmModal">
+  <div class="mo mo-sm">
+    <div class="mo-h">
+      <h3 id="delConfirmTitle">Delete Confirm</h3>
+      <button onclick="closeModal('deleteConfirmModal')">✕</button>
+    </div>
+    <div class="mo-b">
+      <div style="background:var(--rust-bg);border:1px solid rgba(184,74,42,.3);border-radius:9px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--rust);margin-bottom:6px">⚠️ Yeh action permanent hai!</div>
+        <div style="font-size:13px">Aap delete karne wale hain: <strong id="delConfirmItemName"></strong></div>
+      </div>
+      <div class="field">
+        <label>Apna Password confirm karo *</label>
+        <input type="password" id="delConfirmPass" class="inp" placeholder="Apna login password daalo" autocomplete="off">
+        <div id="delConfirmErr" style="color:var(--rust);font-size:12px;margin-top:4px"></div>
+      </div>
+    </div>
+    <div class="mo-f">
+      <button class="btn-out" onclick="closeModal('deleteConfirmModal')">Cancel</button>
+      <button class="btn-gold" style="background:linear-gradient(135deg,var(--rust),#8a3018)" onclick="confirmDeleteWithPass()">🗑️ Confirm Delete</button>
     </div>
   </div>
 </div>
