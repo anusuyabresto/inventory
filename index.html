@@ -60,6 +60,7 @@
       <a class="ni master-only" data-p="users"><i>👥</i> Users</a>
       <a class="ni manager-up" data-p="categories"><i>🗂️</i> Categories</a>
       <a class="ni manager-up" data-p="purchase"><i>🛒</i> Purchase Entry</a>
+      <a class="ni" data-p="complimentary"><i>🎁</i> Complimentary</a>
     </nav>
     <div class="sb-foot">
       <div class="uc">
@@ -333,6 +334,84 @@
       </div>
 
     </div><!-- end pages-wrap -->
+
+      <!-- COMPLIMENTARY / NON-CHARGE -->
+      <div class="page" id="pg-complimentary" style="display:none">
+        <div class="fc">
+          <h3>🎁 Complimentary Entry</h3>
+          <p class="sub-label">Guests ko diye gaye free items ka record — stock automatically deduct hoga. Kisko diya, kya diya, kiske instruction se diya — sab track hoga.</p>
+          <div class="fg">
+            <div class="field">
+              <label>Guest / Table Name *</label>
+              <input type="text" id="compGuest" class="inp" placeholder="e.g. Table 5, VIP Guest, Mr. Sharma">
+            </div>
+            <div class="field">
+              <label>Select Item *</label>
+              <select id="compItem" class="sel" onchange="onCompItemChange()"><option value="">-- Choose Item --</option></select>
+            </div>
+            <div class="field">
+              <label>Stock Level</label>
+              <select id="compLevel" class="sel">
+                <option value="box">📦 Level 1 — Box / Crate</option>
+                <option value="sealed">🍾 Level 2 — Bottle / Packet</option>
+                <option value="loose">🔓 Level 3 — Loose / ml / g</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Quantity *</label>
+              <input type="number" id="compQty" class="inp" placeholder="e.g. 1 bottle, 60 ml" min="0" step="0.001">
+            </div>
+            <div class="field">
+              <label>Kiske Instruction Se? *</label>
+              <select id="compAuth" class="sel">
+                <option value="self">Apna (Self)</option>
+                <option value="manager">Manager</option>
+                <option value="master">Owner / Master</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="field" id="compAuthOtherWrap" style="display:none">
+              <label>Instruction Dene Wale Ka Naam</label>
+              <input type="text" id="compAuthOther" class="inp" placeholder="e.g. Ravi Sir">
+            </div>
+            <div class="field">
+              <label>Reason / Note</label>
+              <input type="text" id="compNote" class="inp" placeholder="e.g. Birthday celebration, Regular guest, Owner request">
+            </div>
+          </div>
+          <div id="compItemInfo" class="item-info-box"></div>
+          <button class="btn-gold" onclick="saveComplimentary()">✅ Save &amp; Deduct Stock</button>
+          <div id="compMsg" class="ok-msg"></div>
+        </div>
+
+        <div class="fc">
+          <h3>📋 Complimentary History</h3>
+          <div class="pc" style="flex-wrap:wrap;gap:8px">
+            <div class="field" style="min-width:150px"><label>From Date</label><input type="date" id="compFromDate" class="inp" onchange="filterComplimentary()"></div>
+            <div class="field" style="min-width:150px"><label>To Date</label><input type="date" id="compToDate" class="inp" onchange="filterComplimentary()"></div>
+            <div class="field"><label>Filter by Level</label>
+              <select id="compLevelFilter" class="sel" onchange="filterComplimentary()">
+                <option value="">All Levels</option>
+                <option value="box">📦 Level 1 (Box)</option>
+                <option value="sealed">🍾 Level 2 (Bottle)</option>
+                <option value="loose">🔓 Level 3 (Loose)</option>
+              </select>
+            </div>
+            <button class="btn-out sm" onclick="downloadCompExcel()">⬇ Excel</button>
+            <button class="btn-out sm" onclick="downloadCompPDF()">⬇ PDF</button>
+          </div>
+          <div style="padding:8px 0;font-size:15px;font-weight:700;color:var(--rust)">Total Items Given: <span id="compTotal">0</span></div>
+          <div class="tw"><table class="tbl">
+            <thead><tr>
+              <th>Date &amp; Time</th><th>Guest / Table</th><th>Item</th>
+              <th>Level</th><th>Qty Given</th><th>Instruction By</th>
+              <th>Note</th><th>Entry By</th>
+              <th>Action</th>
+            </tr></thead>
+            <tbody id="compBody"></tbody>
+          </table></div>
+        </div>
+      </div>
 
     <!-- FOOTER -->
     <footer class="app-footer">

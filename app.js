@@ -188,6 +188,8 @@ async function enterApp() {
   document.getElementById("sbName").textContent=currentUser.name;
   document.getElementById("sbRole").textContent=currentUser.role==="master"?"Master Admin":currentUser.role==="manager"?"Manager":"Staff";
   document.getElementById("sbAv").textContent=currentUser.name.charAt(0).toUpperCase();
+  // Hide all pages initially
+  document.querySelectorAll(".page").forEach(pg=>{ pg.classList.remove("active"); pg.style.display="none"; });
   applyRoleVisibility();
   navigateTo("dashboard");
   startRealtimeListeners();
@@ -248,9 +250,10 @@ function navigateTo(p) {
   currentPage=p;
   document.querySelectorAll(".ni").forEach(l=>l.classList.remove("active"));
   document.querySelector(`.ni[data-p="${p}"]`)?.classList.add("active");
-  document.querySelectorAll(".page").forEach(pg=>pg.classList.remove("active"));
-  document.getElementById(`pg-${p}`)?.classList.add("active");
-  const titles={dashboard:"Dashboard",inventory:"Inventory",stock:"Update Stock",lowstock:"Low Stock",loose:"Loose Stock",audit:"Audit Log",users:"Manage Users",categories:"Categories",purchase:"Purchase Entry",expense:"Daily Expense"};
+  document.querySelectorAll(".page").forEach(pg=>{ pg.classList.remove("active"); pg.style.display="none"; });
+  const activePg = document.getElementById(`pg-${p}`);
+  if(activePg) { activePg.classList.add("active"); activePg.style.display=""; }
+  const titles={dashboard:"Dashboard",inventory:"Inventory",stock:"Update Stock",lowstock:"Low Stock",loose:"Loose Stock",audit:"Audit Log",users:"Manage Users",categories:"Categories",purchase:"Purchase Entry",expense:"Daily Expense",complimentary:"🎁 Complimentary"};
   document.getElementById("pgTitle").textContent=titles[p]||p;
   if(p==="dashboard") renderDashboard();
   else if(p==="inventory") renderInventory();
@@ -262,6 +265,7 @@ function navigateTo(p) {
   else if(p==="categories") renderCategories();
   else if(p==="purchase") renderPurchase();
   else if(p==="expense") renderExpense();
+  else if(p==="complimentary") renderComplimentary();
 }
 
 // ── AUDIT LOG ──
@@ -1316,6 +1320,201 @@ async function savePurchaseToStock() {
   setTimeout(()=>{document.getElementById("purchaseMsg").textContent="";},5000);
   renderPurchase();
   showToast(priceWarning?`✅ ${valid.length} restocked — price daalna mat bhoolo`:'✅ '+valid.length+' restocked + price updated',"ok");
+}
+
+// ── COMPLIMENTARY / NON-CHARGE ──
+async function renderComplimentary() {
+  // Populate item dropdown
+  const items = await getItems();
+  const arr = Object.values(items).sort((a,b)=>a.name.localeCompare(b.name));
+  const sel = document.getElementById("compItem");
+  sel.innerHTML = '<option value="">-- Choose Item --</option>' + arr.map(i=>`<option value="${i.id}">${i.name} | ${decompose3(i)}</option>`).join("");
+
+  // auth other toggle
+  document.getElementById("compAuth").onchange = () => {
+    const v = document.getElementById("compAuth").value;
+    document.getElementById("compAuthOtherWrap").style.display = v==="other" ? "" : "none";
+  };
+
+  await renderComplimentaryHistory();
+}
+
+function onCompItemChange() {
+  const id = document.getElementById("compItem").value;
+  const infoBox = document.getElementById("compItemInfo");
+  if(!id) { infoBox.className="item-info-box"; return; }
+  getItems().then(items => {
+    const item = items[id];
+    if(!item) return;
+    infoBox.innerHTML = `<strong>${item.name}</strong><br>
+      📦 Box/Crate: <strong>${item.boxQty||0} ${item.bulkUnit||""}</strong>
+      &nbsp;|&nbsp; 🍾 Sealed: <strong>${item.sealedQty||0} ${item.sealedUnit||""}</strong>
+      &nbsp;|&nbsp; 🔓 Loose: <strong>${item.looseQty||0} ${item.looseUnit||""}</strong><br>
+      <span style="color:var(--teal)">Smart Total: <strong>${decompose3(item)}</strong></span>`;
+    infoBox.className = "item-info-box show";
+  });
+}
+
+async function saveComplimentary() {
+  const guest = document.getElementById("compGuest").value.trim();
+  const itemId = document.getElementById("compItem").value;
+  const level = document.getElementById("compLevel").value;
+  const qty = parseFloat(document.getElementById("compQty").value);
+  const authBy = document.getElementById("compAuth").value;
+  const authOther = document.getElementById("compAuthOther")?.value.trim() || "";
+  const note = document.getElementById("compNote").value.trim();
+
+  if(!guest) { showToast("Guest/Table naam required", "warn"); return; }
+  if(!itemId) { showToast("Item select karo", "warn"); return; }
+  if(isNaN(qty) || qty <= 0) { showToast("Valid quantity daalo", "warn"); return; }
+
+  const item = await fbGet("items/" + itemId);
+  if(!item) { showToast("Item not found", "err"); return; }
+
+  // Deduct from inventory
+  let updates = { lastUpdatedBy: currentUser.username, lastUpdatedByName: currentUser.name, lastUpdatedAt: Date.now() };
+  let changeText = "", unitLabel = "";
+
+  if(level === "box") {
+    const old = item.boxQty || 0;
+    const nw = Math.max(0, old - qty);
+    updates.boxQty = nw;
+    unitLabel = item.bulkUnit || "box";
+    changeText = `-${qty} ${unitLabel} (Complimentary: ${old}→${nw})`;
+  } else if(level === "sealed") {
+    const old = item.sealedQty || 0;
+    const nw = Math.max(0, old - qty);
+    updates.sealedQty = nw;
+    unitLabel = item.sealedUnit || "bottle";
+    changeText = `-${qty} ${unitLabel} (Complimentary: ${old}→${nw})`;
+  } else {
+    const old = item.looseQty || 0;
+    const nw = Math.max(0, old - qty);
+    updates.looseQty = nw;
+    unitLabel = item.looseUnit || "unit";
+    changeText = `-${qty} ${unitLabel} (Complimentary: ${old}→${nw})`;
+  }
+
+  // Determine instruction by label
+  const authLabels = { self: currentUser.name, manager: "Manager", master: "Owner/Master", other: authOther || "Other" };
+  const authorizedBy = authLabels[authBy] || authBy;
+
+  // Save complimentary record
+  const ref = db.ref("complimentary").push();
+  await ref.set({
+    id: ref.key,
+    timestamp: Date.now(),
+    guest,
+    itemId,
+    itemName: item.name,
+    level,
+    qty,
+    unitLabel,
+    authorizedBy,
+    note,
+    enteredBy: currentUser.username,
+    enteredByName: currentUser.name,
+    enteredByRole: currentUser.role
+  });
+
+  // Deduct from inventory
+  await fbUpdate("items/" + itemId, updates);
+
+  // Audit log
+  await logAction(itemId, item.name, "complimentary given", level, changeText, `Guest: ${guest} | Auth: ${authorizedBy}${note ? " | "+note : ""}`);
+
+  // Reset form
+  document.getElementById("compGuest").value = "";
+  document.getElementById("compItem").value = "";
+  document.getElementById("compQty").value = "";
+  document.getElementById("compNote").value = "";
+  document.getElementById("compItemInfo").className = "item-info-box";
+
+  showToast(`✅ Complimentary saved — ${qty} ${unitLabel} deducted from ${item.name}`, "ok");
+  document.getElementById("compMsg").textContent = `✅ ${qty} ${unitLabel} of "${item.name}" given to ${guest} — Authorized by: ${authorizedBy}`;
+  setTimeout(()=>{ document.getElementById("compMsg").textContent = ""; }, 5000);
+
+  renderComplimentary();
+}
+
+async function renderComplimentaryHistory() {
+  const records = (await fbGet("complimentary")) || {};
+  const fromDate = document.getElementById("compFromDate")?.value;
+  const toDate = document.getElementById("compToDate")?.value;
+  const lvlFilter = document.getElementById("compLevelFilter")?.value || "";
+
+  let arr = Object.values(records).sort((a,b) => b.timestamp - a.timestamp);
+
+  if(fromDate) {
+    const fd = new Date(fromDate); fd.setHours(0,0,0,0);
+    arr = arr.filter(r => r.timestamp >= fd.getTime());
+  }
+  if(toDate) {
+    const td = new Date(toDate); td.setHours(23,59,59,999);
+    arr = arr.filter(r => r.timestamp <= td.getTime());
+  }
+  if(lvlFilter) arr = arr.filter(r => r.level === lvlFilter);
+
+  document.getElementById("compTotal").textContent = arr.length;
+
+  document.getElementById("compBody").innerHTML = arr.length ? arr.map(r => `
+    <tr>
+      <td style="font-family:var(--fm);font-size:11px;white-space:nowrap">${fmtDate(r.timestamp)}</td>
+      <td><strong>${r.guest||"—"}</strong></td>
+      <td><strong>${r.itemName||"—"}</strong></td>
+      <td>
+        ${r.level==="box"?'<span class="badge" style="background:rgba(201,151,42,0.15);color:var(--gold)">📦 L1 Box</span>':
+          r.level==="sealed"?'<span class="badge" style="background:rgba(14,155,140,0.15);color:var(--teal)">🍾 L2 Bottle</span>':
+          '<span class="badge" style="background:rgba(184,74,42,0.15);color:var(--rust)">🔓 L3 Loose</span>'}
+      </td>
+      <td class="qty-n" style="color:var(--rust);font-weight:700">${r.qty} <span style="font-size:11px;color:var(--muted)">${r.unitLabel||""}</span></td>
+      <td><span class="rb" style="background:rgba(14,155,140,0.15);color:var(--teal)">${r.authorizedBy||"—"}</span></td>
+      <td style="color:var(--muted);font-size:12px">${r.note||"—"}</td>
+      <td style="font-size:11px;color:var(--muted)">${r.enteredByName||"—"}</td>
+      <td>
+        ${(currentUser?.role==="master"||currentUser?.role==="manager")?
+          `<button class="bi d" onclick="deleteComplimentary('${r.id}','${(r.itemName||"").replace(/'/g,"\\'")}')">🗑️</button>`:
+          ""}
+      </td>
+    </tr>`).join("") :
+    '<tr><td colspan="9" class="empty"><span class="emp-i">🎁</span>Koi complimentary record nahi</td></tr>';
+}
+
+function filterComplimentary() { renderComplimentaryHistory(); }
+
+async function deleteComplimentary(id, itemName) {
+  if(!confirm(`"${itemName}" ka complimentary record delete karen?\n\n⚠️ Note: Stock wapas nahi aayega — sirf record delete hoga.`)) return;
+  await fbRemove("complimentary/" + id);
+  showToast("🗑️ Complimentary record deleted", "warn");
+  renderComplimentaryHistory();
+}
+
+async function downloadCompExcel() {
+  const records = (await fbGet("complimentary")) || {};
+  const fromDate = document.getElementById("compFromDate")?.value;
+  const toDate = document.getElementById("compToDate")?.value;
+  let arr = Object.values(records).sort((a,b) => a.timestamp - b.timestamp);
+  if(fromDate) { const fd=new Date(fromDate); fd.setHours(0,0,0,0); arr=arr.filter(r=>r.timestamp>=fd.getTime()); }
+  if(toDate) { const td=new Date(toDate); td.setHours(23,59,59,999); arr=arr.filter(r=>r.timestamp<=td.getTime()); }
+  const rows = [["Date & Time","Guest / Table","Item","Level","Qty Given","Unit","Authorized By","Note","Entry By"]];
+  arr.forEach(r=>rows.push([fmtDate(r.timestamp),r.guest||"",r.itemName||"",r.level,r.qty,r.unitLabel||"",r.authorizedBy||"",r.note||"",r.enteredByName||""]));
+  downloadXLSX(rows, "Anusuya_Complimentary_"+todayStr());
+}
+
+async function downloadCompPDF() {
+  const records = (await fbGet("complimentary")) || {};
+  const fromDate = document.getElementById("compFromDate")?.value;
+  const toDate = document.getElementById("compToDate")?.value;
+  let arr = Object.values(records).sort((a,b) => a.timestamp - b.timestamp);
+  if(fromDate) { const fd=new Date(fromDate); fd.setHours(0,0,0,0); arr=arr.filter(r=>r.timestamp>=fd.getTime()); }
+  if(toDate) { const td=new Date(toDate); td.setHours(23,59,59,999); arr=arr.filter(r=>r.timestamp<=td.getTime()); }
+  const rows = arr.map(r=>`<tr><td>${fmtDate(r.timestamp)}</td><td>${r.guest||""}</td><td>${r.itemName||""}</td><td>${r.level}</td><td>${r.qty} ${r.unitLabel||""}</td><td>${r.authorizedBy||""}</td><td>${r.note||"—"}</td><td>${r.enteredByName||""}</td></tr>`).join("");
+  const html=`<html><head><style>body{font-family:Arial;padding:20px}h2{color:#1a0f0a}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#1a0f0a;color:#c9972a;padding:8px;text-align:left}td{padding:6px 8px;border-bottom:1px solid #eee}tr:nth-child(even) td{background:#fafafa}.head{color:#c9972a;font-size:12px;margin-bottom:16px}</style></head><body>
+  <h2>🐟 Anusuya Restaurant & Bar</h2>
+  <div class="head">🎁 Complimentary Report${fromDate?" | From: "+fromDate:""}${toDate?" To: "+toDate:""}</div>
+  <table><thead><tr><th>Date & Time</th><th>Guest / Table</th><th>Item</th><th>Level</th><th>Qty Given</th><th>Authorized By</th><th>Note</th><th>Entry By</th></tr></thead><tbody>${rows}</tbody></table>
+  <div style="margin-top:20px;font-size:10px;color:#aaa">Anusuya Inventory v8 | Total Records: ${arr.length}</div></body></html>`;
+  const w=window.open("","_blank"); w.document.write(html); w.document.close(); setTimeout(()=>w.print(),600);
 }
 
 // ── DOWNLOADS ──

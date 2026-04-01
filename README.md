@@ -120,7 +120,18 @@ Rules tab mein yeh paste karo:
 - Add categories with icon + color
 - Item count per category
 
-### 📱 PWA — Mobile App
+### 🎁 Complimentary / Non-Charge (v8 — NEW)
+- Guests ko diye gaye free items ka complete record
+- Stock automatically inventory se deduct hota hai
+- Track karo: Kisko diya (Guest/Table), Kya diya (Item + Level + Qty)
+- Kiske instruction se diya (Self / Manager / Owner / Custom)
+- Date & Time ke saath full history
+- Filter by date range + level
+- Excel + PDF download
+- Manager/Master delete kar sakte hain (stock wapas nahi aata — sirf record)
+- Audit log mein bhi capture hota hai
+
+
 - Home screen pe install hota hai
 - Offline support (cache)
 - Full-screen standalone mode
@@ -133,6 +144,8 @@ Rules tab mein yeh paste karo:
 |---|---|---|---|
 | View Dashboard | ✅ | ✅ | ✅ |
 | Update Stock | ✅ | ✅ | ✅ |
+| Complimentary Entry | ✅ | ✅ | ✅ |
+| Delete Complimentary | ❌ | ✅ | ✅ |
 | Purchase Entry | ❌ | ✅ | ✅ |
 | Categories | ❌ | ✅ | ✅ |
 | Expenses | ✅ | ✅ | ✅ |
@@ -174,4 +187,4 @@ Rules tab mein yeh paste karo:
 
 ---
 
-*Anusuya Restaurant & Bar | Inventory System v7 | Developed by Aarav (Ravi)*
+*Anusuya Restaurant & Bar | Inventory System v8 | Developed by Aarav (Ravi)*
